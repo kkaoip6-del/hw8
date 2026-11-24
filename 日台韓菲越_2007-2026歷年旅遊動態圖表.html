@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日、台、韓、菲、越 歷年國際入境旅客統計 (2007–2026)</title>
+    <style>
+@import url("https://netdna.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css");
+
+body {
+    font-family:
+        "Microsoft JhengHei",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        Helvetica,
+        Arial,
+        sans-serif;
+    background: var(--highcharts-background-color, #ffffff);
+    color: var(--highcharts-neutral-color-100, #212529);
+}
+
+.highcharts-figure {
+    max-width: 1000px;
+    margin: 1.5em auto;
+    padding: 0 12px;
+}
+
+#play-controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 1em auto 0.75em;
+}
+
+#container {
+    height: 480px;
+    margin: 0 auto;
+}
+
+#play-pause-button {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    cursor: pointer;
+    border: 1px solid #1B4332;
+    border-radius: 24px;
+    color: white;
+    background-color: #1B4332;
+    transition: background-color 250ms, transform 150ms;
+}
+
+#play-pause-button:hover {
+    background-color: #2D6A4F;
+    transform: scale(1.04);
+}
+
+#play-range {
+    flex: 1;
+    cursor: pointer;
+    accent-color: #1B4332;
+}
+
+#current-year-badge {
+    flex-shrink: 0;
+    min-width: 72px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #1B4332;
+    background: #D8F3DC;
+    padding: 6px 12px;
+    border-radius: 16px;
+}
+
+#year-note-banner {
+    background: #F6F9F7;
+    border-left: 4px solid #2A9D8F;
+    color: #1B4332;
+    font-size: 0.92rem;
+    font-weight: 600;
+    padding: 8px 14px;
+    margin-bottom: 12px;
+    border-radius: 0 6px 6px 0;
+}
+
+.highcharts-description {
+    background: light-dark(#f2f6f2, #323232);
+    border-radius: 0 4px 4px 0;
+    border-left: 3px solid light-dark(#1B4332, #fff);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    padding: 10px 16px;
+    margin: 1.5em 0 1em;
+}
+
+    </style>
+  </head>
+
+  <body>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/data-sorting.js"></script>
+
+    <figure class="highcharts-figure">
+      <div id="parent-container">
+        <div id="play-controls">
+          <button id="play-pause-button" class="fa fa-play" title="播放"></button>
+          <input id="play-range" type="range" value="2007" min="2007" max="2026" step="1" />
+          <span id="current-year-badge">2007</span>
+        </div>
+        <div id="year-note-banner">金融海嘯前基準年</div>
+        <div id="container"></div>
+      </div>
+      <p class="highcharts-description">
+        動態長條圖競賽：日本（JNTO）、台灣（交通部觀光署）、韓國（KTO）、菲律賓（DOT）與越南（VNAT）2007 至 2026 年國際入境旅客人次變化（單位：萬人次；2026 年為截至最新公布月份之累計／推估值）。
+      </p>
+    </figure>
+
+    <script>
+// Plugin to add text animation to data labels (支援小數點後一位動畫)
+(Highcharts => {
+    const { charts, Fx, Series, SVGElement, wrap } = Highcharts;
+    const FLOAT = /^-?\d+\.?\d*$/;
+
+    Fx.prototype.textSetter = function() {
+        const chart = charts[this.elem.renderer.chartIndex];
+        let thousandsSep = chart.numberFormatter(1000.0, 1)[1];
+
+        if (/[0-9]/.test(thousandsSep)) {
+            thousandsSep = ',';
+        }
+
+        const replaceRegEx = new RegExp('\\' + thousandsSep, 'g');
+
+        let startValue = String(this.start || '').replace(replaceRegEx, ''),
+            endValue = String(this.end || '').replace(replaceRegEx, ''),
+            currentValue = String(this.end || '').replace(replaceRegEx, '');
+
+        if (startValue.match(FLOAT) && endValue.match(FLOAT)) {
+            const sNum = parseFloat(startValue);
+            const eNum = parseFloat(endValue);
+            const interpolated = sNum + (eNum - sNum) * this.pos;
+
+            currentValue = chart.numberFormatter(interpolated, 1);
+        }
+
+        this.elem.endText = this.end;
+        this.elem.attr(this.prop, currentValue, null, true);
+    };
+
+    SVGElement.prototype.textGetter = function() {
+        const ct = this.text.element.textContent || '';
+        return this.endText ? this.endText : ct.substring(0, ct.length / 2);
+    };
+
+    wrap(Series.prototype, 'drawDataLabels', function(proceed, ...args) {
+        const attr = SVGElement.prototype.attr,
+            chart = this.chart;
+
+        if (chart.sequenceTimer) {
+            this.points.forEach(point =>
+                (point.dataLabels || []).forEach(
+                    label =>
+                        (label.attr = function(...labelArgs) {
+                            const [hash, ...rest] = labelArgs;
+
+                            if (
+                                typeof hash === 'object' &&
+                                hash.text !== undefined &&
+                                chart.isResizing === 0
+                            ) {
+                                const text = hash.text;
+                                delete hash.text;
+
+                                return this.attr(hash, ...rest).animate({
+                                    text
+                                });
+                            }
+                            return attr.apply(this, labelArgs);
+                        })
+                )
+            );
+        }
+
+        const ret = proceed.apply(this, args);
+
+        this.points.forEach(p =>
+            (p.dataLabels || []).forEach(d => (d.attr = attr))
+        );
+
+        return ret;
+    });
+})(Highcharts);
+
+const startYear = 2007,
+    endYear = 2026,
+    btn = document.getElementById('play-pause-button'),
+    input = document.getElementById('play-range'),
+    yearBadge = document.getElementById('current-year-badge'),
+    noteBanner = document.getElementById('year-note-banner'),
+    nbr = 5;
+
+// 固定各國代表色，避免排名變動時顏色跳動
+const countryColors = {
+    '日本': '#1B4332',
+    '台灣': '#D9534F',
+    '韓國': '#1D3557',
+    '菲律賓': '#E09F3E',
+    '越南': '#2A9D8F'
+};
+
+// 來自 Excel「歷年數據(萬人次)」之完整資料
+const dataset = {
+    "日本": {
+        "2007": 834.7,
+        "2008": 835.1,
+        "2009": 679.0,
+        "2010": 861.1,
+        "2011": 621.9,
+        "2012": 835.8,
+        "2013": 1036.4,
+        "2014": 1341.3,
+        "2015": 1973.7,
+        "2016": 2404.0,
+        "2017": 2869.1,
+        "2018": 3119.2,
+        "2019": 3188.2,
+        "2020": 411.6,
+        "2021": 24.6,
+        "2022": 383.2,
+        "2023": 2506.6,
+        "2024": 3687.0,
+        "2025": 4268.3,
+        "2026": 3350.0
+    },
+    "台灣": {
+        "2007": 371.6,
+        "2008": 384.5,
+        "2009": 439.5,
+        "2010": 556.7,
+        "2011": 608.7,
+        "2012": 731.1,
+        "2013": 801.6,
+        "2014": 991.0,
+        "2015": 1044.0,
+        "2016": 1069.0,
+        "2017": 1074.0,
+        "2018": 1106.7,
+        "2019": 1186.4,
+        "2020": 137.8,
+        "2021": 14.0,
+        "2022": 89.5,
+        "2023": 648.7,
+        "2024": 785.8,
+        "2025": 857.5,
+        "2026": 617.7
+    },
+    "韓國": {
+        "2007": 644.8,
+        "2008": 689.1,
+        "2009": 781.8,
+        "2010": 879.8,
+        "2011": 979.5,
+        "2012": 1114.0,
+        "2013": 1217.6,
+        "2014": 1420.2,
+        "2015": 1323.2,
+        "2016": 1724.2,
+        "2017": 1333.6,
+        "2018": 1534.7,
+        "2019": 1750.3,
+        "2020": 251.9,
+        "2021": 96.7,
+        "2022": 319.8,
+        "2023": 1103.2,
+        "2024": 1637.0,
+        "2025": 1893.7,
+        "2026": 2000.0
+    },
+    "菲律賓": {
+        "2007": 309.2,
+        "2008": 313.9,
+        "2009": 301.7,
+        "2010": 352.0,
+        "2011": 391.7,
+        "2012": 427.3,
+        "2013": 468.1,
+        "2014": 483.3,
+        "2015": 536.1,
+        "2016": 596.7,
+        "2017": 662.1,
+        "2018": 716.8,
+        "2019": 826.0,
+        "2020": 148.3,
+        "2021": 16.4,
+        "2022": 201.1,
+        "2023": 545.0,
+        "2024": 595.0,
+        "2025": 648.4,
+        "2026": 500.0
+    },
+    "越南": {
+        "2007": 422.9,
+        "2008": 425.4,
+        "2009": 377.2,
+        "2010": 505.0,
+        "2011": 601.4,
+        "2012": 684.8,
+        "2013": 757.2,
+        "2014": 787.4,
+        "2015": 794.4,
+        "2016": 1001.3,
+        "2017": 1292.2,
+        "2018": 1549.8,
+        "2019": 1801.0,
+        "2020": 383.7,
+        "2021": 15.7,
+        "2022": 366.1,
+        "2023": 1260.0,
+        "2024": 1758.0,
+        "2025": 2120.0,
+        "2026": 1780.0
+    }
+};
+
+// 來自 Excel「關鍵事件與旅遊趨勢備註」
+const yearNotes = {
+    "2007": "金融海嘯前基準年",
+    "2008": "全球金融海嘯爆發",
+    "2009": "H1N1與金融海嘯影響，台韓逆勢成長",
+    "2010": "亞太旅遊全面回溫",
+    "2011": "日本311大地震影響入境",
+    "2012": "韓國首度突破1,100萬人次",
+    "2013": "日本首度突破1,000萬人次",
+    "2014": "日本免簽與日圓貶值效應顯現",
+    "2015": "台灣首度突破1,000萬；韓國受MERS短暫影響",
+    "2016": "越南首度突破1,000萬人次",
+    "2017": "薩德事件影響赴韓陸客",
+    "2018": "日本首度突破3,000萬人次",
+    "2019": "五地疫情前歷史最高峰",
+    "2020": "COVID-19疫情爆發，Q2起邊境封鎖",
+    "2021": "疫情嚴格邊境管制最低谷",
+    "2022": "下半年各國陸續重啟邊境",
+    "2023": "疫後首個完整開放年，強勁反彈",
+    "2024": "日本率先大幅超越2019年紀錄",
+    "2025": "日、韓、越全數刷新歷史新高",
+    "2026": "進行中年度：日(1-10月推估約3,350萬)、台(1-9月617.7萬)、韓(11月中破2,000萬)、菲(11月初逾500萬)、越(1-10月推估約1,780萬)"
+};
+
+let chart;
+
+function getData(year) {
+    const yrKey = String(year);
+    const list = Object.keys(dataset)
+        .map(countryName => ({
+            name: countryName,
+            y: Number(dataset[countryName][yrKey]),
+            color: countryColors[countryName]
+        }))
+        .sort((a, b) => b.y - a.y);
+
+    const total = list.reduce((sum, item) => sum + item.y, 0);
+    return {
+        total: total,
+        items: list.slice(0, nbr)
+    };
+}
+
+function getSubtitle() {
+    const currentYear = Number(input.value);
+    const { total } = getData(currentYear);
+    const yearLabel = currentYear === 2026 ? '2026*' : String(currentYear);
+    return `<span style="font-size: 68px; font-weight: 700; color: #1B4332;">${yearLabel}</span>
+        <br>
+        <span style="font-size: 20px; color: #495057;">
+            五地合計：<b>${total.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</b> 萬人次
+        </span>`;
+}
+
+function updateUIAnnotations(year) {
+    const yrStr = String(year);
+    if (yearBadge) {
+        yearBadge.textContent = year === 2026 ? '2026 (累計)' : yrStr;
+    }
+    if (noteBanner && yearNotes[yrStr]) {
+        noteBanner.textContent = `📌 ${yrStr} 關鍵趨勢：${yearNotes[yrStr]}`;
+    }
+}
+
+const linearEasing = function(pos) {
+    return pos;
+};
+
+(() => {
+    updateUIAnnotations(startYear);
+
+    chart = Highcharts.chart('container', {
+        chart: {
+            animation: {
+                duration: 600,
+                easing: linearEasing
+            },
+            marginRight: 90
+        },
+        title: {
+            text: '日、台、韓、菲、越 國際入境旅客歷年排名 (2007–2026)',
+            align: 'left'
+        },
+        subtitle: {
+            text: getSubtitle(),
+            floating: true,
+            align: 'right',
+            verticalAlign: 'bottom',
+            useHTML: true,
+            y: -35,
+            x: -20
+        },
+        legend: {
+            enabled: false
+        },
+        xAxis: {
+            type: 'category',
+            labels: {
+                style: {
+                    fontSize: '15px',
+                    fontWeight: 'bold'
+                }
+            }
+        },
+        yAxis: {
+            opposite: true,
+            tickPixelInterval: 150,
+            max: 4600,
+            title: {
+                text: '入境旅客數（萬人次）'
+            }
+        },
+        tooltip: {
+            valueDecimals: 1,
+            valueSuffix: ' 萬人次'
+        },
+        plotOptions: {
+            bar: {
+                animation: false,
+                groupPadding: 0.08,
+                pointPadding: 0.12,
+                borderWidth: 0,
+                borderRadius: 4,
+                dataSorting: {
+                    enabled: true,
+                    matchByName: true
+                },
+                dataLabels: {
+                    enabled: true,
+                    format: '{point.y:,.1f} 萬',
+                    style: {
+                        fontSize: '13px',
+                        fontWeight: 'bold'
+                    }
+                }
+            }
+        },
+        series: [
+            {
+                type: 'bar',
+                name: String(startYear),
+                data: getData(startYear).items
+            }
+        ],
+        responsive: {
+            rules: [
+                {
+                    condition: {
+                        maxWidth: 550
+                    },
+                    chartOptions: {
+                        xAxis: {
+                            visible: false
+                        },
+                        subtitle: {
+                            x: 0
+                        },
+                        plotOptions: {
+                            series: {
+                                dataLabels: [
+                                    {
+                                        enabled: true,
+                                        format: '{point.y:,.1f} 萬',
+                                        y: 8
+                                    },
+                                    {
+                                        enabled: true,
+                                        format: '{point.name}',
+                                        y: -8,
+                                        style: {
+                                            fontWeight: 'normal',
+                                            opacity: 0.7
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    });
+})();
+
+function pause(button) {
+    button.title = '播放';
+    button.className = 'fa fa-play';
+    clearInterval(chart.sequenceTimer);
+    chart.sequenceTimer = undefined;
+}
+
+function update(increment) {
+    if (increment) {
+        input.value = String(parseInt(input.value, 10) + increment);
+    }
+    const currentYear = Number(input.value);
+    if (currentYear >= endYear) {
+        pause(btn);
+    }
+
+    updateUIAnnotations(currentYear);
+
+    chart.setTitle(
+        void 0,
+        {
+            text: getSubtitle()
+        },
+        false
+    );
+
+    chart.series[0].update({
+        type: 'bar',
+        name: String(currentYear),
+        data: getData(currentYear).items
+    });
+}
+
+function play(button) {
+    if (Number(input.value) >= endYear) {
+        input.value = String(startYear);
+        update(0);
+    }
+    button.title = '暫停';
+    button.className = 'fa fa-pause';
+    chart.sequenceTimer = setInterval(function() {
+        update(1);
+    }, 800);
+}
+
+btn.addEventListener('click', function() {
+    if (chart.sequenceTimer) {
+        pause(this);
+    } else {
+        play(this);
+    }
+});
+
+input.addEventListener('input', function() {
+    if (chart.sequenceTimer) {
+        pause(btn);
+    }
+    update(0);
+});
+
+    </script>
+  </body>
+
+</html>
